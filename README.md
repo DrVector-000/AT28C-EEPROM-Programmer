@@ -8,6 +8,6 @@ E' basato su Arduino Nano con l'aggiunta di 2 Shift Register (74HC595) per esten
 
 <p align="center" width="100%">
 	<img src="https://github.com/DrVector-000/AT28C-EEPROM-Programmer/blob/main/Images/Scheda01.JPG" alt="Scheda" width="200"/>
-	<img src="https://github.com/DrVector-000/AT28C-EEPROM-Programmer/blob/main/Images/Scheda01.JPG" alt="Scheda" width="200"/>
+	<img src="https://github.com/DrVector-000/AT28C-EEPROM-Programmer/blob/main/Images/Scheda02.JPG" alt="Scheda" width="200"/>
 </p>
 <br/>
