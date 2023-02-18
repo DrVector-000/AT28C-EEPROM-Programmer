@@ -87,7 +87,7 @@ byte writeByte(unsigned int address, byte value)
 //******************************************************************************************************************//
 //* Lettura della EEPROM
 //******************************************************************************************************************//
-void readEEPROM(int size) {
+void readEEPROM(unsigned int size) {
   //Serial.println("START DUMP (" + (String)size + " byte)");
 
   unsigned int addr = 0;
@@ -115,7 +115,7 @@ void readEEPROM(int size) {
 //******************************************************************************************************************//
 //* Scrittura della EEPROM
 //******************************************************************************************************************//
-void writeEEPROM(int size)
+void writeEEPROM(unsigned int size)
 {
   unsigned int address = 0;  
   //for (unsigned int i = 1; i <= size; i++)
@@ -128,4 +128,27 @@ void writeEEPROM(int size)
       address++;
     }    
   }
+}
+
+//******************************************************************************************************************//
+//* Disabilita Software Data Protection
+//******************************************************************************************************************//
+void disableSDP()
+{
+  writeByte(0x5555, 0xaa);
+  writeByte(0x2aaa, 0x55);
+  writeByte(0x5555, 0x80);
+  writeByte(0x5555, 0xaa);
+  writeByte(0x2aaa, 0x55);
+  writeByte(0x5555, 0x20);
+}
+
+//******************************************************************************************************************//
+//* Abilita Software Data Protection
+//******************************************************************************************************************//
+void enableSDP()
+{
+  writeByte(0x5555, 0xaa);
+  writeByte(0x2aaa, 0x55);
+  writeByte(0x5555, 0xa0);
 }

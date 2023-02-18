@@ -136,6 +136,21 @@ void ParseComands(String s) {
         //Serial.println("+++");
       }
     }
+    //**********************************************
+    // ENABLESDP
+    //**********************************************
+    if (comand == "ENABLESDP") {
+      GetComandParams(s, params);
+      // Serial.println("PARAM: " + params[0]);
+      if (params[0] == "1") {
+        enableSDP();
+        Serial.println("+ENABLESDP=1");
+      }
+      else if (params[0] == "0") {
+        disableSDP();
+        Serial.println("+ENABLESDP=0");
+      }
+    }
   }
 }
 
