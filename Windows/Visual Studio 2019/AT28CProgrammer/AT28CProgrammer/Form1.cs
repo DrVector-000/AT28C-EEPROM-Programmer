@@ -208,20 +208,28 @@ namespace AT28CProgrammer
                     progressBar1.Maximum = size;
                     progressBar1.Value = 0;
 
-                    tBInfo.AppendText("Inizio scrittura RAM \r\n");
+                    tBInfo.AppendText("Inizio scrittura EEPROM \r\n");
 
                     _serialPort.DiscardInBuffer();
                     _serialPort.DiscardOutBuffer();
 
                     // Carica i dati
+                    int ret;
                     using (BinaryReader reader = new BinaryReader(File.Open(openFileDialog1.FileName, FileMode.Open)))
                     {
                         byte[] buffer = new byte[size];
                         reader.Read(buffer, 0, size);
-                        WriteEEPROM(size, buffer);
+                        ret = WriteEEPROM(size, buffer);
                     }
 
-                    tBInfo.AppendText("Scrittua RAM terminata\r\n");
+                    if (ret == 0)
+                    {
+                        tBInfo.AppendText("Scrittua EEPROM terminata\r\n");
+                    }
+                    else
+                    {
+                        tBInfo.AppendText("Errore scrittua EEPROM\r\n");
+                    }
                     tBInfo.AppendText("\r\n");
                 }
             }
@@ -272,7 +280,7 @@ namespace AT28CProgrammer
             {
                 _serialPort.Write("VERSION=?\r");
 
-                // 5 secondi di timeout
+                // 100 ms secondi di timeout
                 int ExpiredTick = Environment.TickCount + 100;
                 while (Environment.TickCount < ExpiredTick)
                 {
@@ -301,13 +309,14 @@ namespace AT28CProgrammer
             String s = "";
             try
             {
-                // 5 secondi di timeout
+                // 1.5 secondi di timeout
                 int ExpiredTick = Environment.TickCount + 1500;
                 while (Environment.TickCount < ExpiredTick)
                 {
                     if (_serialPort.BytesToRead > 0)
                     {
                         s += _serialPort.ReadLine();
+                        // 100 ms di timeout fine comunicazione seriale
                         ExpiredTick = Environment.TickCount + 100;
                     }
                 }
@@ -349,7 +358,7 @@ namespace AT28CProgrammer
             catch { }
         }
 
-        public void WriteEEPROM(int size, byte[] datas)
+        public int WriteEEPROM(int size, byte[] datas)
         {
             string s = "";
             try
@@ -360,11 +369,31 @@ namespace AT28CProgrammer
                 {
                     _serialPort.Write(datas, i, 1);
                     // Ritardo di 10 millisecondi per permettere la scrittura
-                    Thread.Sleep(10);
+                    // Thread.Sleep(10);
+                    // Attende il byte ricevuto dal programmatore
+                    // indicante l'avveunuta scrittura della EPROM
+                    // 100 ms di timeout attesa scrittura carattere massima
+                    int ExpiredTick = Environment.TickCount + 100;
+                    int count = 0;
+                    while (Environment.TickCount < ExpiredTick)
+                    {
+                        count = _serialPort.BytesToRead;
+                        if (count > 0)
+                        {
+                            byte[] buffer = new byte[count];
+                            _serialPort.Read(buffer, 0, count);
+                            break;
+                        }
+                    }
+                    if (count == 0) {
+                        return -1;
+                    }
                     progressBar1.Increment(1);
                 }
+                return 0;
             }
             catch { }
+            return -1;
         }
 
         #endregion

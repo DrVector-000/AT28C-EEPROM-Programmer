@@ -95,18 +95,19 @@ void readEEPROM(unsigned int size) {
   // Azzera lo shift register
   //addressWrite(0x0000);
 
-  byte buffer[256];
-  int index = 0;
+//  byte buffer[256];
+//  int index = 0;
   for (int i = 0; i < size; i++) {
     byte bval = readByte(addr + i);
-    buffer[index] = bval;
-    index ++;
+//    buffer[index] = bval;
+//    index ++;
     //Serial.println(bval, DEC);
     
-    if (index == 256) {
-      Serial.write(buffer, 256);
-      index = 0;
-    }
+//    if (index == 256) {
+//      Serial.write(buffer, 1);
+//      index = 0;
+//    }
+      Serial.write(&bval, 1);
   }
     
   //Serial.println("END DUMP");
@@ -125,6 +126,7 @@ void writeEEPROM(unsigned int size)
     if (Serial.available() > 0) {
       val = Serial.read();
       writeByte(address, val);
+      Serial.write(&val, 1);
       address++;
     }    
   }
