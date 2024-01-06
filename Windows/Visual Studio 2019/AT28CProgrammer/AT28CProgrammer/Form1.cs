@@ -59,12 +59,11 @@ namespace AT28CProgrammer
         {
             if (Connetti())
             {
-                Thread.Sleep(1000);
+                tBInfo.Text = "";
 
                 String firmw = LeggiFirmware();
                 if (firmw != "")
                 {
-                    tBInfo.Text = "";
                     tBInfo.AppendText("Firmware version " + firmw + "\r\n");
                     tBInfo.AppendText("---------------------------------------------\r\n");
                     tBInfo.AppendText("\r\n");
@@ -80,7 +79,39 @@ namespace AT28CProgrammer
                 }
                 else
                 {
-                    Disconnetti();
+                    // non ha ricevuto la risposta alla versione firmware  
+                    // attende l'eventuale intestazione inviata dal programmatore per massimo 1.5 secondi
+                    String head = LeggiHeader();
+                    if (head != "")
+                    {
+                        tBInfo.AppendText(head);
+                        tBInfo.AppendText("\r\n");
+
+                        firmw = LeggiFirmware();
+                        if (firmw != "")
+                        {
+                            tBInfo.AppendText("Firmware version " + firmw + "\r\n");
+                            tBInfo.AppendText("---------------------------------------------\r\n");
+                            tBInfo.AppendText("\r\n");
+
+                            bDisconnetti.Enabled = true;
+                            bConnetti.Enabled = false;
+                            cBSerialPorts.Enabled = false;
+                            //bInfo.Enabled = true;
+                            //bDump.Enabled = true;
+                            //bRAMDump.Enabled = true;
+                            //bRAMWrite.Enabled = true;
+                            toolStripStatusLabel1.Text = "Dispositivo connesso";
+                        }
+                        else
+                        {
+                            Disconnetti();
+                        }
+                    }
+                    else
+                    {
+                        Disconnetti();
+                    }
                 }
             }
         }
@@ -242,11 +273,12 @@ namespace AT28CProgrammer
                 _serialPort.Write("VERSION=?\r");
 
                 // 5 secondi di timeout
-                int ExpiredTick = Environment.TickCount + 5000;
+                int ExpiredTick = Environment.TickCount + 100;
                 while (Environment.TickCount < ExpiredTick)
                 {
                     if (_serialPort.BytesToRead > 0)
                     {
+                        ExpiredTick = Environment.TickCount + 100;
                         s = _serialPort.ReadLine();
                         string[] split = s.Trim('\r').Split(new char[] { '=' });
                         if (split[0] == "+VERSION")
@@ -254,6 +286,29 @@ namespace AT28CProgrammer
                             s = split[1];
                             break;
                         }
+                    }
+                }
+                return s;
+            }
+            catch
+            {
+                return s;
+            }
+        }
+
+        private string LeggiHeader()
+        {
+            String s = "";
+            try
+            {
+                // 5 secondi di timeout
+                int ExpiredTick = Environment.TickCount + 1500;
+                while (Environment.TickCount < ExpiredTick)
+                {
+                    if (_serialPort.BytesToRead > 0)
+                    {
+                        s += _serialPort.ReadLine();
+                        ExpiredTick = Environment.TickCount + 100;
                     }
                 }
                 return s;
