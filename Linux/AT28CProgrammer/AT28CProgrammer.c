@@ -33,6 +33,9 @@ int readAnswer(int fd, long msec);
 // legge la risposta dal programmatore con il contenuto della memoria e lo salva sul file indicato, attende la risposta per max msec millisecondi 
 int readEprom(int fd, e_rom_type romtype, char* filename, long msec);
 
+// legge la risposta dal programmatore con il contenuto della memoria e lo verifica con il contenuto del file indicato, attende la risposta per max msec millisecondi 
+int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec);
+
 // invia al prorammatore i dati da scrivere leggendoli dal file indicato, per ogni byte attende al massimo msecforbyte millisecondi
 int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte);
 
@@ -42,8 +45,11 @@ int main (int argc, char **argv) {
   // selezione memoria di default
   e_rom_type romtype = AT28C64;
 
-  // indicatore se lettura o scritture della memoria
+  // indicatore se scritture della memoria
   bool writemem = false;
+
+  // indicatore se verifica della memoria
+  bool verifymem = false;
 
   // nome del device seriale a cui è collegato il programmatore
   char *device = NULL;
@@ -53,7 +59,7 @@ int main (int argc, char **argv) {
 
   // effettua il parsing dei parametri passati da linea di comando
   int c;
-  while ((c = getopt (argc, argv, "d:f:wt:")) != -1) {
+  while ((c = getopt (argc, argv, "d:f:t:wv")) != -1) {
     switch (c) {
       // nome della seriale alla quale è connesso il programmatore
       case 'd':
@@ -74,6 +80,10 @@ int main (int argc, char **argv) {
       // opzione per la scrittura della memoria
       case 'w':
         writemem = true;
+        break;
+      // opzione per la verifica della memoria
+      case 'v':
+        verifymem = true;
         break;
     }
   }
@@ -176,8 +186,23 @@ int main (int argc, char **argv) {
     }
   }
 
-  // verifica se richiesta scrittura o lettura della memoria
-  if (writemem) {
+  // verifica se richiesta verifica della memoria
+  if (verifymem) {
+    // invia il comando di richiesta lettura della memoria selezionata
+    if (requestRead(fd, romtype) == -1) {
+      close(fd);
+      printf("error request read eprom\n");
+      return -1;
+    }
+    // legge la risposta con il contenuto della memoria e lo verifica con quanto presente su file
+    if (verifyEprom(fd, romtype, filename, 100) == -1) {
+      close(fd);
+      printf("error verifying eprom\n");
+      return -1;
+    }
+  }
+  // verifica se richiesta scrittura della memoria
+  else if (writemem) {
     // invia il comando di richiesta scrittura della memoria selezionata
     if (requestWrite(fd, romtype) == -1) {
       close(fd);
@@ -349,6 +374,76 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
   // visualizza il numero di bytes ricevuti
   printf("read: %d\n", readed);
   close(writefd);
+
+  // verifica se ha ricevuto il numero di bytes attesi
+  if (readed != totalbytes) {
+    return -1;
+  }
+
+  return 0;
+}
+
+// legge la risposta dal programmatore con il contenuto della memoria e lo verifica con il contenuto del file indicato, attende la risposta per max msec millisecondi 
+int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
+  int totalbytes = 0;
+  int readed = 0;
+  int lastperc = -1;
+  if (romtype == AT28C64) {
+    totalbytes = 8192;
+  }
+  if (romtype == AT28C256) {
+    totalbytes = 32768;
+  }
+  int readfd = open(filename, O_RDONLY);
+  if (readfd == -1) {
+    printf("error opening input file\n");
+    return -1;
+  }
+
+  while (true) {
+    fd_set rfds;
+    struct timeval tv;
+    int retval;
+
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+
+    tv.tv_sec = (msec * 1000) / 1000000;
+    tv.tv_usec = (msec * 1000) % 1000000;
+
+    retval = select(fd + 1, &rfds, NULL, NULL, &tv);
+    if (retval == -1) {
+      printf("error select\n");
+      return -1;
+    } else if (retval > 0) {
+      char c;
+      read(fd, &c, 1);
+      readed++;
+      char rc;
+      read(readfd, &rc, 1);
+      if (c != rc) {
+          printf("-> eprom byte: 0x%02X, file byte: 0x%02X\r", (unsigned char)c, (unsigned char)rc);
+          break;
+      }
+      int perc = readed * 100 / totalbytes;
+      if (perc != lastperc) {
+        printf("<- verify percent: %d%%\r", perc);
+        fflush(stdout);
+        lastperc = perc;
+      }
+    } else {
+      // timeout attesa risposta
+      break;
+    }
+  }
+
+  if (readed) {
+    printf("\n");
+  }
+
+  // visualizza il numero di bytes ricevuti
+  printf("verified: %d\n", readed);
+  close(readfd);
 
   // verifica se ha ricevuto il numero di bytes attesi
   if (readed != totalbytes) {
