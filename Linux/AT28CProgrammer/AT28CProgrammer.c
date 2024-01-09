@@ -39,17 +39,22 @@ int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec);
 // invia al prorammatore i dati da scrivere leggendoli dal file indicato, per ogni byte attende al massimo msecforbyte millisecondi
 int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte);
 
+// setup Software Data Protection
+int setupSDP(int fd, bool enable, long msec);
+
+// invia al programmatore il byte da scrivere, attende al massimo msecforbyte millisecondi
+int writeByte(int fd, int address, unsigned char val, long msecforbyte);
+
+// legge dal programmatore la locazione di memoria richiesta, attende al massimo msecforbyte millisecondi
+int readByte(int fd, int address, long msecforbyte);
 
 // applicazione principale
 int main (int argc, char **argv) {
   // selezione memoria di default
-  e_rom_type romtype = AT28C64;
+  e_rom_type romtype = NONE;
 
-  // indicatore se scritture della memoria
-  bool writemem = false;
-
-  // indicatore se verifica della memoria
-  bool verifymem = false;
+  // indicatore operazione
+  char operation = 0;
 
   // nome del device seriale a cui è collegato il programmatore
   char *device = NULL;
@@ -57,9 +62,15 @@ int main (int argc, char **argv) {
   // nome del file da leggere o scrivere
   char *filename = NULL;
 
+  // indirizzo da leggere o scrivere
+  int address = -1;
+
+  // valore da scrivere
+  int val = 256;
+
   // effettua il parsing dei parametri passati da linea di comando
   int c;
-  while ((c = getopt (argc, argv, "d:f:t:wv")) != -1) {
+  while ((c = getopt (argc, argv, "d:f:t:o:a:b:")) != -1) {
     switch (c) {
       // nome della seriale alla quale è connesso il programmatore
       case 'd':
@@ -77,26 +88,69 @@ int main (int argc, char **argv) {
           return -1;
         }
         break;
-      // opzione per la scrittura della memoria
-      case 'w':
-        writemem = true;
+      case 'o':
+        // opzione per la scrittura della memoria
+        if (optarg[0] == 'w') {
+          operation = 'w';
+        // opzione per la verifica della memoria
+        } else if (optarg[0] == 'v') {
+          operation = 'v';
+        // opzione per la lettura della memoria
+        } else if (optarg[0] == 'r') {
+          operation = 'r';
+        // opzione per l'abilitazione del software data protection
+        } else if (optarg[0] == 'e') {
+          operation = 'e';
+        // opzione per la disabilitazione del software data protection
+        } else if (optarg[0] == 'd') {
+          operation = 'd';
+        }
+        else {
+          printf("unknown operation\n");
+          return -1;
+        }
         break;
-      // opzione per la verifica della memoria
-      case 'v':
-        verifymem = true;
+      // indirizzo da leggere o scrivere
+      case 'a':
+        address = atoi(optarg);
+        break;
+      // valore da scrivere
+      case 'b':
+        val = atoi(optarg);
+        if (val > 255) {
+          printf("wrong value\n");
+          return -1;
+        }
         break;
     }
   }
 
+  if (address >= 8192 && romtype == AT28C64) {
+    printf("wrong address\n");
+    return -1;
+  }
+
+  if (address >= 32768 && romtype == AT28C256) {
+    printf("wrong address\n");
+    return -1;
+  }
+
   // se non sono stati impostati gli argomenti obbligatori visualizza l'help ed esce
-  if (device == NULL || filename == NULL) {
-    printf("use: AT28CProgrammer -d <device> -f <filename> [-w] [-t <romtype>]\n");
+  if (device == NULL ||
+      (filename == NULL && (operation == 'w' || operation == 'r' || operation == 'v')) ||
+      operation == 0 ||
+      romtype == NONE) {
+    printf("use: AT28CProgrammer -d <device> [-f <filename>] -o <operation> -t <romtype>\n");
     printf("\t-d: serial port\n");
     printf("\t-f: file name to read or write\n");
-    printf("\t-w: set to write eprom (default is read)\n");
-    printf("\t-t: rom type 0 = AT28C64 (default), 1 = AT28C256\n");
-    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/dump.bin -t 1\n");
-    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/towrite.bin -t 0 -w\n");
+    printf("\t-o r: set to read eprom\n");
+    printf("\t-o w: set to write eprom\n");
+    printf("\t-o v: set to verify eprom\n");
+    printf("\t-o e: set to enable software data protection\n");
+    printf("\t-o d: set to disable software data protection\n");
+    printf("\t-t: rom type 0 = AT28C64, 1 = AT28C256\n");
+    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/dump.bin -t 1 -o r\n");
+    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/towrite.bin -t 0 -o w\n");
     return -1;
   }
 
@@ -187,7 +241,7 @@ int main (int argc, char **argv) {
   }
 
   // verifica se richiesta verifica della memoria
-  if (verifymem) {
+  if (operation == 'v') {
     // invia il comando di richiesta lettura della memoria selezionata
     if (requestRead(fd, romtype) == -1) {
       close(fd);
@@ -202,30 +256,68 @@ int main (int argc, char **argv) {
     }
   }
   // verifica se richiesta scrittura della memoria
-  else if (writemem) {
-    // invia il comando di richiesta scrittura della memoria selezionata
-    if (requestWrite(fd, romtype) == -1) {
+  else if (operation == 'w') {
+    if (address != -1) {
+      // invia il comando di richiesta scrittura della byte
+      if (writeByte(fd, address, val, 100) == -1) {
+        close(fd);
+        printf("error request write byte\n");
+        return -1;
+      }
+    } else {
+      // invia il comando di richiesta scrittura della memoria selezionata
+      if (requestWrite(fd, romtype) == -1) {
+        close(fd);
+        printf("error request write eprom\n");
+        return -1;
+      }
+      // invia il contenuto del file da scrivere, per ogny byte scritto attende al massimo 10 ms per la scrittura
+      if (writeEprom(fd, romtype, filename, 100) == -1) {
+        close(fd);
+        printf("error write eprom\n");
+        return -1;
+      }
+    }
+  }
+  // verifica se richiesta lettura della memoria
+  else if (operation == 'r') {
+    if (address != -1) {
+      // invia il comando di richiesta scrittura della byte
+      if (readByte(fd, address, 100) == -1) {
+        close(fd);
+        printf("error request read byte\n");
+        return -1;
+      }
+    } else {
+      // invia il comando di richiesta lettura della memoria selezionata
+      if (requestRead(fd, romtype) == -1) {
+        close(fd);
+        printf("error request read eprom\n");
+        return -1;
+      }
+      // legge la risposta con il contenuto della memoria e lo salva su file
+      if (readEprom(fd, romtype, filename, 100) == -1) {
+        close(fd);
+        printf("error reading eprom\n");
+        return -1;
+      }
+    }
+  }
+  // verifica se richiesta abilitazione del software data protection
+  else if (operation == 'e') {
+    // invia il comando di richiesta abilitazione del software data protection
+    if (setupSDP(fd, true, 100) == -1) {
       close(fd);
-      printf("error request write eprom\n");
+      printf("error enabling software data protection\n");
       return -1;
     }
-    // invia il contenuto del file da scrivere, per ogny byte scritto attende al massimo 10 ms per la scrittura
-    if (writeEprom(fd, romtype, filename, 100) == -1) {
+  }
+  // verifica se richiesta disabilitazione del software data protection
+  else if (operation == 'd') {
+    // invia il comando di richiesta disabilitazione del software data protection
+    if (setupSDP(fd, false, 100) == -1) {
       close(fd);
-      printf("error write eprom\n");
-      return -1;
-    }
-  } else {
-    // invia il comando di richiesta lettura della memoria selezionata
-    if (requestRead(fd, romtype) == -1) {
-      close(fd);
-      printf("error request read eprom\n");
-      return -1;
-    }
-    // legge la risposta con il contenuto della memoria e lo salva su file
-    if (readEprom(fd, romtype, filename, 100) == -1) {
-      close(fd);
-      printf("error reading eprom\n");
+      printf("error disabling software data protection\n");
       return -1;
     }
   }
@@ -387,6 +479,7 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
 int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
   int totalbytes = 0;
   int readed = 0;
+  int errors = 0;
   int lastperc = -1;
   if (romtype == AT28C64) {
     totalbytes = 8192;
@@ -418,13 +511,17 @@ int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
     } else if (retval > 0) {
       char c;
       read(fd, &c, 1);
-      readed++;
       char rc;
       read(readfd, &rc, 1);
       if (c != rc) {
-          printf("-> eprom byte: 0x%02X, file byte: 0x%02X\r", (unsigned char)c, (unsigned char)rc);
+          printf("\n-> address: 0x%04X, eprom byte: 0x%02X, file byte: 0x%02X\n", (unsigned int)readed, (unsigned char)c, (unsigned char)rc);
+          errors++;
+      }
+      if (errors >= 3) {
+          printf("\n-> print maximum three errors\r");
           break;
       }
+      readed++;
       int perc = readed * 100 / totalbytes;
       if (perc != lastperc) {
         printf("<- verify percent: %d%%\r", perc);
@@ -447,6 +544,11 @@ int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
 
   // verifica se ha ricevuto il numero di bytes attesi
   if (readed != totalbytes) {
+    return -1;
+  }
+  
+  if (errors) {
+    printf("%d errors found\n", errors);
     return -1;
   }
 
@@ -518,6 +620,93 @@ int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte) {
 
   // verifica se ha scritto il numero di bytes attesi
   if (written != totalbytes) {
+    return -1;
+  }
+
+  return 0;
+}
+
+// setup Software Data Protection
+int setupSDP(int fd, bool enable, long msec) {
+  tcflush(fd, TCIOFLUSH);
+
+  const char* cmdEnableSDP = "ENABLESDP=1\r";
+  const char* cmdDisableSDP = "ENABLESDP=0\r";
+  if (enable) {
+    printf("enable software data protection\n");
+    return write(fd, cmdEnableSDP, strlen(cmdEnableSDP));
+  } else {
+    printf("disable software data protection\n");
+    return write(fd, cmdDisableSDP, strlen(cmdDisableSDP));
+  }
+  return -1;
+}
+
+// invia al programmatore il byte da scrivere, attende al massimo msecforbyte millisecondi
+int writeByte(int fd, int address, unsigned char val, long msecforbyte) {
+  tcflush(fd, TCIOFLUSH);
+
+  const char* cmdWriteByte = "WRITEBYTE=%d,%d\r";
+  char buff[32];
+  sprintf(buff, cmdWriteByte, address, val);
+  printf("write byte 0x%02X at address 0x%04X\n", (unsigned char)val, (unsigned int)address);
+  write(fd, cmdWriteByte, strlen(cmdWriteByte));
+
+  fd_set rfds;
+  struct timeval tv;
+  int retval;
+
+  FD_ZERO(&rfds);
+  FD_SET(fd, &rfds);
+
+  tv.tv_sec = (msecforbyte * 1000) / 1000000;
+  tv.tv_usec = (msecforbyte * 1000) % 1000000;
+
+  retval = select(fd + 1, &rfds, NULL, NULL, &tv);
+  if (retval == -1) {
+    printf("error select\n");
+    return -1;
+  } else if (retval > 0) {
+    // ricevuto risposta legge 1 carattere e lo stampa
+    char c;
+    read(fd, &c, 1);
+    printf("written byte 0x%02X at address 0x%04X\n", (unsigned char)c, (unsigned int)address);
+  } else {
+    return -1;
+  }
+
+  return 0;
+}
+
+// legge dal programmatore la locazione di memoria richiesta, attende al massimo msecforbyte millisecondi
+int readByte(int fd, int address, long msecforbyte) {
+  tcflush(fd, TCIOFLUSH);
+
+  const char* cmdReadByte = "READBYTE=%d\r";
+  char buff[32];
+  sprintf(buff, cmdReadByte, address);
+  write(fd, cmdReadByte, strlen(cmdReadByte));
+
+  fd_set rfds;
+  struct timeval tv;
+  int retval;
+
+  FD_ZERO(&rfds);
+  FD_SET(fd, &rfds);
+
+  tv.tv_sec = (msecforbyte * 1000) / 1000000;
+  tv.tv_usec = (msecforbyte * 1000) % 1000000;
+
+  retval = select(fd + 1, &rfds, NULL, NULL, &tv);
+  if (retval == -1) {
+    printf("error select\n");
+    return -1;
+  } else if (retval > 0) {
+    // ricevuto risposta legge 1 carattere e lo stampa
+    char c;
+    read(fd, &c, 1);
+    printf("read byte 0x%02X at address 0x%04X\n", (unsigned char)c, (unsigned int)address);
+  } else {
     return -1;
   }
 

@@ -382,6 +382,9 @@ namespace AT28CProgrammer
                         {
                             byte[] buffer = new byte[count];
                             _serialPort.Read(buffer, 0, count);
+                            if (buffer[0] != datas[i]) {
+                                return -1;
+                            }
                             break;
                         }
                     }
