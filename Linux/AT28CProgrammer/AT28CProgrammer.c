@@ -297,7 +297,7 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
   int writefd = -1;
   int totalbytes = 0;
   int readed = 0;
-  int lastperc = 0;
+  int lastperc = -1;
   if (romtype == AT28C64) {
     totalbytes = 8192;
   }
@@ -362,7 +362,7 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
 int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte) {
   int totalbytes = 0;
   int written = 0;
-  int lastperc = 0;
+  int lastperc = -1;
   if (romtype == AT28C64) {
     totalbytes = 8192;
   }
@@ -393,8 +393,12 @@ int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte) {
       printf("error select\n");
       return -1;
     } else if (retval > 0) {
-      char c;
-      read(fd, &c, 1);
+      char rc;
+      read(fd, &rc, 1);
+      if (rc != c) {
+          printf("-> written byte: 0x%02X, read byte: 0x%02X\r", (unsigned char)c, (unsigned char)rc);
+          break;
+      }
     } else {
       // timeout attesa risposta scrittura byte
       break;

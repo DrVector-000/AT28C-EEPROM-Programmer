@@ -29,15 +29,20 @@ byte readByte(unsigned int address) {
   // Imposta il bus dati in input
   setDataBusMode(INPUT);
   
+  digitalWrite(EEPROM_CE_PIN, HIGH);
   digitalWrite(EEPROM_OE_PIN, HIGH);
-  digitalWrite(EEPROM_CE_PIN, LOW);
   digitalWrite(EEPROM_WE_PIN, HIGH);
+  delayMicroseconds(1);
 
   // Imposta indirizzo
   addressWrite(address);
   //Serial.println("address=" + (String)addr);
 
+  digitalWrite(EEPROM_CE_PIN, LOW);
+  delayMicroseconds(1);
+
   digitalWrite(EEPROM_OE_PIN, LOW);
+  delayMicroseconds(1);
   //delayMicroseconds(100);
 
   // Lettura pins D2/D9 (Bus Dati)
@@ -47,6 +52,10 @@ byte readByte(unsigned int address) {
   }
 
   digitalWrite(EEPROM_OE_PIN, HIGH);
+  delayMicroseconds(1);
+
+  digitalWrite(EEPROM_CE_PIN, HIGH);
+  delayMicroseconds(1);
 
   return bval;
 }
@@ -56,11 +65,13 @@ byte readByte(unsigned int address) {
 //******************************************************************************************************************//
 byte writeByte(unsigned int address, byte value)
 {
-  // Imposta il bus di dati in output
-	setDataBusMode(OUTPUT);
-
+  digitalWrite(EEPROM_CE_PIN, HIGH);
   digitalWrite(EEPROM_OE_PIN, HIGH);
   digitalWrite(EEPROM_WE_PIN, HIGH);
+  delayMicroseconds(1);
+
+  // Imposta il bus di dati in output
+	setDataBusMode(OUTPUT);
 
   // Imposta indirizzo
   addressWrite(address);
@@ -71,6 +82,7 @@ byte writeByte(unsigned int address, byte value)
 		//int a = (value & (1 << i)) > 0;
 		digitalWrite(dataPins[i], bitRead(value, i));
 	}
+  delayMicroseconds(1);
 
   digitalWrite(EEPROM_CE_PIN, LOW);
   delayMicroseconds(1);
@@ -79,9 +91,37 @@ byte writeByte(unsigned int address, byte value)
   delayMicroseconds(1);
 
   digitalWrite(EEPROM_WE_PIN, HIGH);
-  digitalWrite(EEPROM_CE_PIN, LOW);
+  delayMicroseconds(1);
 
-  return value;
+  // Imposta il bus dati in input
+  setDataBusMode(INPUT);
+
+  digitalWrite(EEPROM_OE_PIN, LOW);
+  delayMicroseconds(1);
+
+  // Attende il termine della scrittura del byte, verificando
+  // che il bit 7 corrisponda a quando scritto
+  // durante la scrittura il bit 7 è il complemento di quanto inviato
+  while (bitRead(value, 7) != digitalRead(dataPins[7])) {
+    digitalWrite(EEPROM_OE_PIN, HIGH);
+    delayMicroseconds(1);
+    delay(1);
+    digitalWrite(EEPROM_OE_PIN, LOW);
+    delayMicroseconds(1);
+  }
+
+  // Lettura pins D2/D9 (Bus Dati)
+  byte bval = 0;
+  for (int y = 0; y < 8; y++) {
+    bitWrite(bval, y, digitalRead(dataPins[y]));
+  }
+
+  digitalWrite(EEPROM_OE_PIN, HIGH);
+  delayMicroseconds(1);
+  digitalWrite(EEPROM_CE_PIN, HIGH);
+  delayMicroseconds(1);
+
+  return bval;
 }
 
 //******************************************************************************************************************//
@@ -125,8 +165,8 @@ void writeEEPROM(unsigned int size)
     byte val = 0;
     if (Serial.available() > 0) {
       val = Serial.read();
-      writeByte(address, val);
-      Serial.write(&val, 1);
+      byte wval = writeByte(address, val);
+      Serial.write(&wval, 1);
       address++;
     }    
   }
