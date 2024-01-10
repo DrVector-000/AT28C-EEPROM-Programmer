@@ -25,7 +25,7 @@ int requestFirmware(int fd);
 int requestRead(int fd, e_rom_type romtype);
 
 // invia il comando di richiesta scrittura della memoria
-int requestWrite(int fd, e_rom_type romtype);
+int requestWrite(int fd, e_rom_type romtype, bool paged);
 
 // legge e visualizza la risposta dal programmatore
 int readAnswer(int fd, long msec);
@@ -37,7 +37,7 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec);
 int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec);
 
 // invia al prorammatore i dati da scrivere leggendoli dal file indicato, per ogni byte attende al massimo msecforbyte millisecondi
-int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte);
+int writeEprom(int fd, e_rom_type romtype, bool paged, char* filename, long msecforbyte);
 
 // setup Software Data Protection
 int setupSDP(int fd, bool enable, long msec);
@@ -55,6 +55,9 @@ int main (int argc, char **argv) {
 
   // indicatore operazione
   char operation = 0;
+
+  // indicatore operazione paginata
+  bool paged = false;
 
   // nome del device seriale a cui è collegato il programmatore
   char *device = NULL;
@@ -92,6 +95,10 @@ int main (int argc, char **argv) {
         // opzione per la scrittura della memoria
         if (optarg[0] == 'w') {
           operation = 'w';
+          // opzione per la scrittura della memoria paginata
+          if (optarg[1] == 'p') {
+            paged = true;
+          }
         // opzione per la verifica della memoria
         } else if (optarg[0] == 'v') {
           operation = 'v';
@@ -266,13 +273,13 @@ int main (int argc, char **argv) {
       }
     } else {
       // invia il comando di richiesta scrittura della memoria selezionata
-      if (requestWrite(fd, romtype) == -1) {
+      if (requestWrite(fd, romtype, paged) == -1) {
         close(fd);
         printf("error request write eprom\n");
         return -1;
       }
       // invia il contenuto del file da scrivere, per ogny byte scritto attende al massimo 10 ms per la scrittura
-      if (writeEprom(fd, romtype, filename, 100) == -1) {
+      if (writeEprom(fd, romtype, paged, filename, 100) == -1) {
         close(fd);
         printf("error write eprom\n");
         return -1;
@@ -350,15 +357,25 @@ int requestRead(int fd, e_rom_type romtype) {
 }
 
 // invia il comando di richiesta scrittura della memoria
-int requestWrite(int fd, e_rom_type romtype) {
+int requestWrite(int fd, e_rom_type romtype, bool paged) {
   tcflush(fd, TCIOFLUSH);
 
-  const char* cmdWriteAT28C64 = "WRITEEEPROM=8192\r";
-  const char* cmdWriteAT28C256 = "WRITEEEPROM=32768\r";
   if (romtype == AT28C64) {
-    return write(fd, cmdWriteAT28C64, strlen(cmdWriteAT28C64));
+    if (paged) {
+      const char* cmdWrite = "WRITEEEPROM=8192,64\r";
+      return write(fd, cmdWrite, strlen(cmdWrite));
+    } else {
+      const char* cmdWrite = "WRITEEEPROM=8192\r";
+      return write(fd, cmdWrite, strlen(cmdWrite));
+    }
   } else if (romtype == AT28C256) {
-    return write(fd, cmdWriteAT28C256, strlen(cmdWriteAT28C256));
+    if (paged) {
+      const char* cmdWrite = "WRITEEEPROM=32768,64\r";
+      return write(fd, cmdWrite, strlen(cmdWrite));
+    } else {
+      const char* cmdWrite = "WRITEEEPROM=32768\r";
+      return write(fd, cmdWrite, strlen(cmdWrite));
+    }
   }
   return -1;
 }
@@ -556,9 +573,9 @@ int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
 }
 
 // invia al prorammatore i dati da scrivere leggendoli dal file indicato, per ogni byte attende al massimo msecforbyte millisecondi
-int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte) {
-  int totalbytes = 0;
-  int written = 0;
+int writeEprom(int fd, e_rom_type romtype, bool paged, char* filename, long msecforbyte) {
+  size_t totalbytes = 0;
+  size_t written = 0;
   int lastperc = -1;
   if (romtype == AT28C64) {
     totalbytes = 8192;
@@ -572,36 +589,52 @@ int writeEprom(int fd, e_rom_type romtype, char* filename, long msecforbyte) {
     return -1;
   }
   char c;
-  while (read(readfd, &c, 1) == 1) {
-    write(fd, &c, 1);
+  size_t blocksize = paged ? 64 : 1;
+  unsigned char buf[blocksize];
+  while (read(readfd, buf, blocksize) == blocksize) {
+    write(fd, buf, blocksize);
 
-    fd_set rfds;
-    struct timeval tv;
-    int retval;
+    size_t recvd = 0;
+    unsigned char rbuf[blocksize];
+    while (recvd < blocksize) {
+      fd_set rfds;
+      struct timeval tv;
+      int retval;
 
-    FD_ZERO(&rfds);
-    FD_SET(fd, &rfds);
+      FD_ZERO(&rfds);
+      FD_SET(fd, &rfds);
 
-    tv.tv_sec = (msecforbyte * 1000) / 1000000;
-    tv.tv_usec = (msecforbyte * 1000) % 1000000;
+      tv.tv_sec = (msecforbyte * 1000) / 1000000;
+      tv.tv_usec = (msecforbyte * 1000) % 1000000;
 
-    retval = select(fd + 1, &rfds, NULL, NULL, &tv);
-    if (retval == -1) {
-      printf("error select\n");
-      return -1;
-    } else if (retval > 0) {
-      char rc;
-      read(fd, &rc, 1);
-      if (rc != c) {
-          printf("-> written byte: 0x%02X, read byte: 0x%02X\r", (unsigned char)c, (unsigned char)rc);
-          break;
+      retval = select(fd + 1, &rfds, NULL, NULL, &tv);
+      if (retval == -1) {
+        printf("error select\n");
+        return -1;
+      } else if (retval > 0) {
+        char rc;
+        recvd += read(fd, rbuf + recvd, blocksize - recvd);
+      } else {
+        // timeout attesa risposta scrittura byte
+        printf("write timeout\n");
+        break;
       }
-    } else {
-      // timeout attesa risposta scrittura byte
+    }
+
+    bool err = false;
+    for (size_t idx = 0; idx < blocksize; idx++) {
+      if (rbuf[idx] != buf[idx]) {
+        printf("\n-> written byte: 0x%02X, read byte: 0x%02X\n", buf[idx], rbuf[idx]);
+        err = true;
+        break;
+      }
+    }
+
+    if (err) {
       break;
     }
 
-    written++;
+    written += blocksize;
     int perc = written * 100 / totalbytes;
     if (perc != lastperc) {
       printf("-> write percent: %d%%\r", perc);
