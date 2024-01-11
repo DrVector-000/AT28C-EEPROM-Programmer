@@ -59,6 +59,9 @@ int main (int argc, char **argv) {
   // indicatore operazione paginata
   bool paged = false;
 
+  // indicatore leura scrittura singolo byte
+  bool singlebyte = false;
+
   // nome del device seriale a cui è collegato il programmatore
   char *device = NULL;
 
@@ -69,7 +72,7 @@ int main (int argc, char **argv) {
   int address = -1;
 
   // valore da scrivere
-  int val = 256;
+  int val = -1;
 
   // effettua il parsing dei parametri passati da linea di comando
   int c;
@@ -99,12 +102,20 @@ int main (int argc, char **argv) {
           if (optarg[1] == 'p') {
             paged = true;
           }
+          // opzione per la scrittura di un byte
+          if (optarg[1] == 'b') {
+            singlebyte = true;
+          }
         // opzione per la verifica della memoria
         } else if (optarg[0] == 'v') {
           operation = 'v';
         // opzione per la lettura della memoria
         } else if (optarg[0] == 'r') {
           operation = 'r';
+          // opzione per la lettura di un byte
+          if (optarg[1] == 'b') {
+            singlebyte = true;
+          }
         // opzione per l'abilitazione del software data protection
         } else if (optarg[0] == 'e') {
           operation = 'e';
@@ -119,11 +130,21 @@ int main (int argc, char **argv) {
         break;
       // indirizzo da leggere o scrivere
       case 'a':
-        address = atoi(optarg);
+        if (optarg[0] == 'x') {
+          sscanf(optarg + 1, "%x", &address);
+        } else {
+          address = atoi(optarg);
+        }
         break;
       // valore da scrivere
       case 'b':
-        val = atoi(optarg);
+        if (optarg[0] == 'x') {
+          int ival;
+          sscanf(optarg + 1, "%x", &ival);
+          val = ival;
+        } else {
+          val = atoi(optarg);
+        }
         if (val > 255) {
           printf("wrong value\n");
           return -1;
@@ -144,20 +165,29 @@ int main (int argc, char **argv) {
 
   // se non sono stati impostati gli argomenti obbligatori visualizza l'help ed esce
   if (device == NULL ||
-      (filename == NULL && (operation == 'w' || operation == 'r' || operation == 'v')) ||
       operation == 0 ||
-      romtype == NONE) {
-    printf("use: AT28CProgrammer -d <device> [-f <filename>] -o <operation> -t <romtype>\n");
+      romtype == NONE ||
+      (filename == NULL && (operation == 'w' || operation == 'r' || operation == 'v') && singlebyte == false) ||
+      (address == -1 && (operation == 'w' || operation == 'r') && singlebyte == true) ||
+      (val == -1 && operation == 'w' && singlebyte == true)) {
+    printf("use: AT28CProgrammer -d <device> -t <romtype> -o <operation> [-a <address>] [-b <byte>] [-f <filename>]\n");
     printf("\t-d: serial port\n");
-    printf("\t-f: file name to read or write\n");
+    printf("\t-t: rom type 0 = AT28C64, 1 = AT28C256\n");
     printf("\t-o r: set to read eprom\n");
+    printf("\t-o rb: set to read byte (needed -a parameter)\n");
     printf("\t-o w: set to write eprom\n");
+    printf("\t-o wp: set to paged write eprom (only supported by AT28C256)\n");
+    printf("\t-o wb: set to write byte (needed -a and -b parameters)\n");
     printf("\t-o v: set to verify eprom\n");
     printf("\t-o e: set to enable software data protection\n");
     printf("\t-o d: set to disable software data protection\n");
-    printf("\t-t: rom type 0 = AT28C64, 1 = AT28C256\n");
-    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/dump.bin -t 1 -o r\n");
-    printf("\texample: AT28CProgrammer -d /dev/ttyUSB0 -f /tmp/towrite.bin -t 0 -o w\n");
+    printf("\t-a: address to read or write for single byte mode (decimal or preceded with x for hex)\n");
+    printf("\t-b: byte to write for single byte mode (decimal or preceded with x for hex)\n");
+    printf("\t-f: file name to read or write\n");
+    printf("\tread  example:    AT28CProgrammer -d /dev/ttyUSB0 -t 1 -o r -f /tmp/dump.bin\n");
+    printf("\twrite example:    AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o w -f /tmp/towrite.bin\n");
+    printf("\read byte example: AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a 4096\n");
+    printf("\read byte example: AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a x1000\n");
     return -1;
   }
 
@@ -176,12 +206,12 @@ int main (int argc, char **argv) {
   }
 
   // impostazione dei parametri della porta seriale
-  struct termios tio; 
-  if (tcgetattr(fd, &tio) != 0) { 
+  struct termios tio;
+  if (tcgetattr(fd, &tio) != 0) {
     close(fd);
-    printf("error tcgetattr\n"); 
-    return -1; 
-  } 
+    printf("error tcgetattr\n");
+    return -1;
+  }
 
   // minimum number of character for non canonical read
   tio.c_cc[VMIN] = 1;
@@ -203,12 +233,12 @@ int main (int argc, char **argv) {
   cfsetispeed(&tio, B115200);
   cfsetospeed(&tio, B115200);
 
-  // apply settings to serial port 
-  if (tcsetattr(fd, TCSANOW, &tio) != 0) { 
+  // apply settings to serial port
+  if (tcsetattr(fd, TCSANOW, &tio) != 0) {
     close(fd);
-    printf("error tcsetattr\n"); 
-    return -1; 
-  } 
+    printf("error tcsetattr\n");
+    return -1;
+  }
 
   // imposta la seriale in modalità non blocking durante la lettura e pulisce eventuali comunicazioni residue
   fcntl(fd, F_SETFL, FNDELAY);
@@ -224,7 +254,7 @@ int main (int argc, char **argv) {
 
   // attende la risposta per un massimo di 100 ms (se il dispositivo non è stato resettato nell'apertura della comunicazione risponderà qui)
   if (readAnswer(fd, 100) == -1) {
-    // non ha ricevuto la risposta alla versione firmware  
+    // non ha ricevuto la risposta alla versione firmware
     // attende l'eventuale intestazione inviata dal programmatore per massimo 1.5 secondi
     if (readAnswer(fd, 1500) == -1) {
       close(fd);
@@ -264,7 +294,7 @@ int main (int argc, char **argv) {
   }
   // verifica se richiesta scrittura della memoria
   else if (operation == 'w') {
-    if (address != -1) {
+    if (singlebyte) {
       // invia il comando di richiesta scrittura della byte
       if (writeByte(fd, address, val, 100) == -1) {
         close(fd);
@@ -288,7 +318,7 @@ int main (int argc, char **argv) {
   }
   // verifica se richiesta lettura della memoria
   else if (operation == 'r') {
-    if (address != -1) {
+    if (singlebyte) {
       // invia il comando di richiesta scrittura della byte
       if (readByte(fd, address, 100) == -1) {
         close(fd);
@@ -563,7 +593,7 @@ int verifyEprom(int fd, e_rom_type romtype, char* filename, long msec) {
   if (readed != totalbytes) {
     return -1;
   }
-  
+
   if (errors) {
     printf("%d errors found\n", errors);
     return -1;
@@ -682,7 +712,7 @@ int writeByte(int fd, int address, unsigned char val, long msecforbyte) {
   const char* cmdWriteByte = "WRITEBYTE=%d,%d\r";
   char buff[32];
   sprintf(buff, cmdWriteByte, address, val);
-  printf("write byte 0x%02X at address 0x%04X\n", (unsigned char)val, (unsigned int)address);
+  printf("write byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)val, (unsigned char)val, (unsigned int)address, (unsigned int)address);
   write(fd, cmdWriteByte, strlen(cmdWriteByte));
 
   fd_set rfds;
@@ -703,7 +733,7 @@ int writeByte(int fd, int address, unsigned char val, long msecforbyte) {
     // ricevuto risposta legge 1 carattere e lo stampa
     char c;
     read(fd, &c, 1);
-    printf("written byte 0x%02X at address 0x%04X\n", (unsigned char)c, (unsigned int)address);
+    printf("written byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
   } else {
     return -1;
   }
@@ -718,6 +748,7 @@ int readByte(int fd, int address, long msecforbyte) {
   const char* cmdReadByte = "READBYTE=%d\r";
   char buff[32];
   sprintf(buff, cmdReadByte, address);
+  printf("read byte from address %u [x%04X]\n", (unsigned int)address, (unsigned int)address);
   write(fd, cmdReadByte, strlen(cmdReadByte));
 
   fd_set rfds;
@@ -738,7 +769,7 @@ int readByte(int fd, int address, long msecforbyte) {
     // ricevuto risposta legge 1 carattere e lo stampa
     char c;
     read(fd, &c, 1);
-    printf("read byte 0x%02X at address 0x%04X\n", (unsigned char)c, (unsigned int)address);
+    printf("read byte %u x%02X at address %u 0x%04X\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
   } else {
     return -1;
   }
