@@ -132,7 +132,11 @@ void ParseComands(String s) {
       GetComandParams(s, params);
       // Serial.println("PARAM: " + params[0]);
       if (params[0] != "") {
-        writeEEPROM(params[0].toInt());
+        if (params[1] != "") {
+          writePagedEEPROM(params[0].toInt(), params[1].toInt());
+        } else {
+          writeEEPROM(params[0].toInt());
+        }
         //Serial.println("+++");
       }
     }

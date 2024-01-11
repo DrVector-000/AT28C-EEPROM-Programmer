@@ -59,12 +59,11 @@ namespace AT28CProgrammer
         {
             if (Connetti())
             {
-                Thread.Sleep(1000);
+                tBInfo.Text = "";
 
                 String firmw = LeggiFirmware();
                 if (firmw != "")
                 {
-                    tBInfo.Text = "";
                     tBInfo.AppendText("Firmware version " + firmw + "\r\n");
                     tBInfo.AppendText("---------------------------------------------\r\n");
                     tBInfo.AppendText("\r\n");
@@ -80,7 +79,39 @@ namespace AT28CProgrammer
                 }
                 else
                 {
-                    Disconnetti();
+                    // non ha ricevuto la risposta alla versione firmware  
+                    // attende l'eventuale intestazione inviata dal programmatore per massimo 1.5 secondi
+                    String head = LeggiHeader();
+                    if (head != "")
+                    {
+                        tBInfo.AppendText(head);
+                        tBInfo.AppendText("\r\n");
+
+                        firmw = LeggiFirmware();
+                        if (firmw != "")
+                        {
+                            tBInfo.AppendText("Firmware version " + firmw + "\r\n");
+                            tBInfo.AppendText("---------------------------------------------\r\n");
+                            tBInfo.AppendText("\r\n");
+
+                            bDisconnetti.Enabled = true;
+                            bConnetti.Enabled = false;
+                            cBSerialPorts.Enabled = false;
+                            //bInfo.Enabled = true;
+                            //bDump.Enabled = true;
+                            //bRAMDump.Enabled = true;
+                            //bRAMWrite.Enabled = true;
+                            toolStripStatusLabel1.Text = "Dispositivo connesso";
+                        }
+                        else
+                        {
+                            Disconnetti();
+                        }
+                    }
+                    else
+                    {
+                        Disconnetti();
+                    }
                 }
             }
         }
@@ -127,6 +158,9 @@ namespace AT28CProgrammer
                 {
                     tBInfo.AppendText("Inizio lettura EEPROM \r\n");
                     tBInfo.AppendText(DateTime.Now.ToString("HH:mm:ss") + "\r\n");
+                    tBInfo.Invalidate();
+                    tBInfo.Update();
+                    tBInfo.Refresh();
 
                     _serialPort.DiscardInBuffer();
                     _serialPort.DiscardOutBuffer();
@@ -177,20 +211,31 @@ namespace AT28CProgrammer
                     progressBar1.Maximum = size;
                     progressBar1.Value = 0;
 
-                    tBInfo.AppendText("Inizio scrittura RAM \r\n");
+                    tBInfo.AppendText("Inizio scrittura paginata EEPROM \r\n");
+                    tBInfo.Invalidate();
+                    tBInfo.Update();
+                    tBInfo.Refresh();
 
                     _serialPort.DiscardInBuffer();
                     _serialPort.DiscardOutBuffer();
 
                     // Carica i dati
+                    int ret;
                     using (BinaryReader reader = new BinaryReader(File.Open(openFileDialog1.FileName, FileMode.Open)))
                     {
                         byte[] buffer = new byte[size];
                         reader.Read(buffer, 0, size);
-                        WriteEEPROM(size, buffer);
+                        ret = WriteEEPROM(size, 64, buffer);
                     }
 
-                    tBInfo.AppendText("Scrittua RAM terminata\r\n");
+                    if (ret == 0)
+                    {
+                        tBInfo.AppendText("Scrittua EEPROM terminata\r\n");
+                    }
+                    else
+                    {
+                        tBInfo.AppendText("Errore scrittua EEPROM\r\n");
+                    }
                     tBInfo.AppendText("\r\n");
                 }
             }
@@ -241,12 +286,13 @@ namespace AT28CProgrammer
             {
                 _serialPort.Write("VERSION=?\r");
 
-                // 5 secondi di timeout
-                int ExpiredTick = Environment.TickCount + 5000;
+                // 100 ms secondi di timeout
+                int ExpiredTick = Environment.TickCount + 100;
                 while (Environment.TickCount < ExpiredTick)
                 {
                     if (_serialPort.BytesToRead > 0)
                     {
+                        ExpiredTick = Environment.TickCount + 100;
                         s = _serialPort.ReadLine();
                         string[] split = s.Trim('\r').Split(new char[] { '=' });
                         if (split[0] == "+VERSION")
@@ -254,6 +300,30 @@ namespace AT28CProgrammer
                             s = split[1];
                             break;
                         }
+                    }
+                }
+                return s;
+            }
+            catch
+            {
+                return s;
+            }
+        }
+
+        private string LeggiHeader()
+        {
+            String s = "";
+            try
+            {
+                // 1.5 secondi di timeout
+                int ExpiredTick = Environment.TickCount + 1500;
+                while (Environment.TickCount < ExpiredTick)
+                {
+                    if (_serialPort.BytesToRead > 0)
+                    {
+                        s += _serialPort.ReadLine();
+                        // 100 ms di timeout fine comunicazione seriale
+                        ExpiredTick = Environment.TickCount + 100;
                     }
                 }
                 return s;
@@ -294,22 +364,54 @@ namespace AT28CProgrammer
             catch { }
         }
 
-        public void WriteEEPROM(int size, byte[] datas)
+        public int WriteEEPROM(int size, int pagesize, byte[] datas)
         {
             string s = "";
             try
             {
-                _serialPort.Write("WRITEEEPROM=" + size.ToString() + "\r");
-                // Invia 1 byte per volta
-                for (int i = 0; i < datas.Length; i++)
-                {
-                    _serialPort.Write(datas, i, 1);
-                    // Ritardo di 10 millisecondi per permettere la scrittura
-                    Thread.Sleep(10);
-                    progressBar1.Increment(1);
+                if (pagesize != 0) {
+                    _serialPort.Write("WRITEEEPROM=" + size.ToString() + "," + pagesize.ToString() + "\r");
+                } else {
+                    pagesize = 1;
+                    _serialPort.Write("WRITEEEPROM=" + size.ToString() + "\r");
                 }
+                // Invia 1 byte per volta
+                for (int i = 0; i < datas.Length; i+= pagesize)
+                {
+                    for (int p = 0; p < pagesize; p++) {
+                        _serialPort.Write(datas, i + p, 1);
+                    }
+                    // Ritardo di 10 millisecondi per permettere la scrittura
+                    // Thread.Sleep(10);
+                    // Attende il byte ricevuto dal programmatore
+                    // indicante l'avveunuta scrittura della EPROM
+                    // 100 ms di timeout attesa scrittura carattere massima
+                    int ExpiredTick = Environment.TickCount + 100;
+                    int count = 0;
+                    while (Environment.TickCount < ExpiredTick)
+                    {
+                        count = _serialPort.BytesToRead;
+                        if (count >= pagesize)
+                        {
+                            byte[] buffer = new byte[count];
+                            _serialPort.Read(buffer, 0, count);
+                            for (int p = 0; p < pagesize; p++) {
+                                if (buffer[p] != datas[i + p]) {
+                                    return -1;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if (count == 0) {
+                        return -1;
+                    }
+                    progressBar1.Increment(pagesize);
+                }
+                return 0;
             }
             catch { }
+            return -1;
         }
 
         #endregion
