@@ -185,59 +185,56 @@ namespace AT28CProgrammer
         private void bWrite_Click(object sender, EventArgs e)
         {
             int size = 0;
+            int pagesize = 0;
+
+            if (cBTipoEEPROM.Text == "")
+            {
+                tBInfo.AppendText("Selezionare il tipo di EEPROM \r\n");
+                return;
+            }
+
+            if (cBTipoEEPROM.Text == "AT28C256")
+            {
+                pagesize = 64;
+            }
 
             Cursor.Current = Cursors.WaitCursor;
 
-            /*
-            switch (cBTipoEEPROM.Text)
+            openFileDialog1.FileName = "dump.bin";
+            if (openFileDialog1.ShowDialog() == DialogResult.OK)
             {
-                case "AT28C64":
-                    size = 8192;
-                    break;
-                case "AT28C256":
-                    size = 32768;
-                    break;
-            }
-            */
+                FileInfo fi = new FileInfo(openFileDialog1.FileName);
+                size = (int)fi.Length;
 
-            //if (size > 0)
-            {
-                openFileDialog1.FileName = "dump.bin";
-                if (openFileDialog1.ShowDialog() == DialogResult.OK)
+                progressBar1.Maximum = size;
+                progressBar1.Value = 0;
+
+                tBInfo.AppendText("Inizio scrittura EEPROM \r\n");
+                tBInfo.Invalidate();
+                tBInfo.Update();
+                tBInfo.Refresh();
+
+                _serialPort.DiscardInBuffer();
+                _serialPort.DiscardOutBuffer();
+
+                // Carica i dati
+                int ret;
+                using (BinaryReader reader = new BinaryReader(File.Open(openFileDialog1.FileName, FileMode.Open)))
                 {
-                    FileInfo fi = new FileInfo(openFileDialog1.FileName);
-                    size = (int)fi.Length;
-
-                    progressBar1.Maximum = size;
-                    progressBar1.Value = 0;
-
-                    tBInfo.AppendText("Inizio scrittura paginata EEPROM \r\n");
-                    tBInfo.Invalidate();
-                    tBInfo.Update();
-                    tBInfo.Refresh();
-
-                    _serialPort.DiscardInBuffer();
-                    _serialPort.DiscardOutBuffer();
-
-                    // Carica i dati
-                    int ret;
-                    using (BinaryReader reader = new BinaryReader(File.Open(openFileDialog1.FileName, FileMode.Open)))
-                    {
-                        byte[] buffer = new byte[size];
-                        reader.Read(buffer, 0, size);
-                        ret = WriteEEPROM(size, 64, buffer);
-                    }
-
-                    if (ret == 0)
-                    {
-                        tBInfo.AppendText("Scrittua EEPROM terminata\r\n");
-                    }
-                    else
-                    {
-                        tBInfo.AppendText("Errore scrittua EEPROM\r\n");
-                    }
-                    tBInfo.AppendText("\r\n");
+                    byte[] buffer = new byte[size];
+                    reader.Read(buffer, 0, size);
+                    ret = WriteEEPROM(size, pagesize, buffer);
                 }
+
+                if (ret == 0)
+                {
+                    tBInfo.AppendText("Scrittua EEPROM terminata\r\n");
+                }
+                else
+                {
+                    tBInfo.AppendText("Errore scrittua EEPROM\r\n");
+                }
+                tBInfo.AppendText("\r\n");
             }
 
             Cursor.Current = Cursors.Default;

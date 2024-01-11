@@ -89,7 +89,7 @@ void ParseComands(String s) {
       GetComandParams(s, params);
       // Serial.println("PARAM: " + params[0]);
       if (params[0] == "?") {
-        Serial.println("+VERSION=0.001b");
+        Serial.println("+VERSION=0.002b");
       }
     }
     //**********************************************
