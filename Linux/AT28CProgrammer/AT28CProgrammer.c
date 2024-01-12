@@ -88,10 +88,10 @@ int main (int argc, char **argv) {
         break;
       // selezione tipologia di memoria
       case 't':
-        romtype = atoi(optarg);
-        if (romtype < 0 || romtype >= NONE) {
+        if (strcmp("AT28C64", optarg) == 0) romtype = AT28C64;
+        if (strcmp("AT28C256", optarg) == 0) romtype = AT28C256;
+        if (romtype == NONE) {
           printf("unknown romtype\n");
-          return -1;
         }
         break;
       case 'o':
@@ -125,7 +125,6 @@ int main (int argc, char **argv) {
         }
         else {
           printf("unknown operation\n");
-          return -1;
         }
         break;
       // indirizzo da leggere o scrivere
@@ -155,12 +154,12 @@ int main (int argc, char **argv) {
 
   if (address >= 8192 && romtype == AT28C64) {
     printf("wrong address\n");
-    return -1;
+    address = -1; // print help if needed
   }
 
   if (address >= 32768 && romtype == AT28C256) {
     printf("wrong address\n");
-    return -1;
+    address = -1; // print help if needed
   }
 
   // se non sono stati impostati gli argomenti obbligatori visualizza l'help ed esce
@@ -172,7 +171,8 @@ int main (int argc, char **argv) {
       (val == -1 && operation == 'w' && singlebyte == true)) {
     printf("use: AT28CProgrammer -d <device> -t <romtype> -o <operation> [-a <address>] [-b <byte>] [-f <filename>]\n");
     printf("\t-d: serial port\n");
-    printf("\t-t: rom type 0 = AT28C64, 1 = AT28C256\n");
+    printf("\t-t AT28C64: eeprom type AT28C64\n");
+    printf("\t-t AT28C256: eeprom type AT28C256\n");
     printf("\t-o r: set to read eprom\n");
     printf("\t-o rb: set to read byte (needed -a parameter)\n");
     printf("\t-o w: set to write eprom\n");
@@ -184,10 +184,10 @@ int main (int argc, char **argv) {
     printf("\t-a: address to read or write for single byte mode (decimal or preceded with x for hex)\n");
     printf("\t-b: byte to write for single byte mode (decimal or preceded with x for hex)\n");
     printf("\t-f: file name to read or write\n");
-    printf("\tread  example:    AT28CProgrammer -d /dev/ttyUSB0 -t 1 -o r -f /tmp/dump.bin\n");
-    printf("\twrite example:    AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o w -f /tmp/towrite.bin\n");
-    printf("\read byte example: AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a 4096\n");
-    printf("\read byte example: AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a x1000\n");
+    printf("read  example:      AT28CProgrammer -d /dev/ttyUSB0 -t 1 -o r -f /tmp/dump.bin\n");
+    printf("write example:      AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o w -f /tmp/towrite.bin\n");
+    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a 4096\n");
+    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a x1000\n");
     return -1;
   }
 
@@ -654,7 +654,7 @@ int writeEprom(int fd, e_rom_type romtype, bool paged, char* filename, long msec
     bool err = false;
     for (size_t idx = 0; idx < blocksize; idx++) {
       if (rbuf[idx] != buf[idx]) {
-        printf("\n-> written byte: 0x%02X, read byte: 0x%02X\n", buf[idx], rbuf[idx]);
+        printf("\n-> written byte: %u [x%02X], read byte: %u [x%02X]\n", buf[idx], buf[idx], rbuf[idx], rbuf[idx]);
         err = true;
         break;
       }
@@ -731,9 +731,13 @@ int writeByte(int fd, int address, unsigned char val, long msecforbyte) {
     return -1;
   } else if (retval > 0) {
     // ricevuto risposta legge 1 carattere e lo stampa
-    char c;
+    unsigned char c;
     read(fd, &c, 1);
-    printf("written byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
+    if (c != val) {
+      printf("write error, read byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
+    } else {
+      printf("written byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
+    }
   } else {
     return -1;
   }
@@ -769,7 +773,7 @@ int readByte(int fd, int address, long msecforbyte) {
     // ricevuto risposta legge 1 carattere e lo stampa
     char c;
     read(fd, &c, 1);
-    printf("read byte %u x%02X at address %u 0x%04X\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
+    printf("read byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
   } else {
     return -1;
   }
