@@ -184,10 +184,10 @@ int main (int argc, char **argv) {
     printf("\t-a: address to read or write for single byte mode (decimal or preceded with x for hex)\n");
     printf("\t-b: byte to write for single byte mode (decimal or preceded with x for hex)\n");
     printf("\t-f: file name to read or write\n");
-    printf("read  example:      AT28CProgrammer -d /dev/ttyUSB0 -t 1 -o r -f /tmp/dump.bin\n");
-    printf("write example:      AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o w -f /tmp/towrite.bin\n");
-    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a 4096\n");
-    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t 0 -o rb -a x1000\n");
+    printf("read  example:      AT28CProgrammer -d /dev/ttyUSB0 -t AT28C256 -o r -f /tmp/dump.bin\n");
+    printf("write example:      AT28CProgrammer -d /dev/ttyUSB0 -t AT28C64 -o w -f /tmp/towrite.bin\n");
+    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t AT28C64 -o rb -a 4096\n");
+    printf("read byte example:  AT28CProgrammer -d /dev/ttyUSB0 -t AT28C64 -o rb -a x1000\n");
     return -1;
   }
 
