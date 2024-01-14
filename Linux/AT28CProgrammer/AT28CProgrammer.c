@@ -166,14 +166,14 @@ int main (int argc, char **argv) {
   if (device == NULL ||
       operation == 0 ||
       romtype == NONE ||
-      (filename == NULL && (operation == 'w' || operation == 'r' || operation == 'v') && singlebyte == false) ||
+      (filename == NULL && (operation == 'w' || operation == 'v') && singlebyte == false) ||
       (address == -1 && (operation == 'w' || operation == 'r') && singlebyte == true) ||
       (val == -1 && operation == 'w' && singlebyte == true)) {
     printf("use: AT28CProgrammer -d <device> -t <romtype> -o <operation> [-a <address>] [-b <byte>] [-f <filename>]\n");
     printf("\t-d: serial port\n");
     printf("\t-t AT28C64: eeprom type AT28C64\n");
     printf("\t-t AT28C256: eeprom type AT28C256\n");
-    printf("\t-o r: set to read eprom\n");
+    printf("\t-o r: set to read eprom (save to file or dump to screen if no file selected)\n");
     printf("\t-o rb: set to read byte (needed -a parameter)\n");
     printf("\t-o w: set to write eprom\n");
     printf("\t-o wp: set to paged write eprom (only supported by AT28C256)\n");
@@ -468,12 +468,16 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
   if (romtype == AT28C256) {
     totalbytes = 32768;
   }
-  unlink(filename);
-  writefd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  if (writefd == -1) {
-    printf("error opening output file\n");
-    return -1;
+  if (filename != NULL) {
+    unlink(filename);
+    writefd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (writefd == -1) {
+      printf("error opening output file\n");
+      return -1;
+    }
   }
+  char buf[128];
+  char bufr[16 + 1];
   while (true) {
     fd_set rfds;
     struct timeval tv;
@@ -490,13 +494,28 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
       printf("error select\n");
       return -1;
     } else if (retval > 0) {
-      char c;
+      unsigned char c;
       read(fd, &c, 1);
+      if (filename != NULL) {
+        write(writefd, &c, 1);
+      } else {
+        if (readed % 16 == 0) {
+          sprintf(buf, "x%04X: ", readed);
+        }
+        sprintf(buf + strlen(buf), " x%02X", c);
+        bufr[readed % 16] = c >= 0x20 && c < 0x7F ? c : '.';
+      }
       readed++;
-      write(writefd, &c, 1);
+      if (filename == NULL && readed % 16 == 0) {
+        bufr[16] = 0;
+        sprintf(buf + strlen(buf), "  -  | %s |\n", bufr);
+        printf(buf);
+      }
       int perc = readed * 100 / totalbytes;
       if (perc != lastperc) {
-        printf("<- read percent: %d%%\r", perc);
+        if (filename != NULL) {
+          printf("<- read percent: %d%%\r", perc);
+        }
         fflush(stdout);
         lastperc = perc;
       }
@@ -506,13 +525,15 @@ int readEprom(int fd, e_rom_type romtype, char* filename, long msec) {
     }
   }
 
-  if (readed) {
+  if (filename != NULL && readed) {
     printf("\n");
   }
 
   // visualizza il numero di bytes ricevuti
   printf("read: %d\n", readed);
-  close(writefd);
+  if (filename != NULL) {
+    close(writefd);
+  }
 
   // verifica se ha ricevuto il numero di bytes attesi
   if (readed != totalbytes) {
