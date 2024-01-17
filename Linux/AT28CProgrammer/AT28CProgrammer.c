@@ -169,6 +169,7 @@ int main (int argc, char **argv) {
       (filename == NULL && (operation == 'w' || operation == 'v') && singlebyte == false) ||
       (address == -1 && (operation == 'w' || operation == 'r') && singlebyte == true) ||
       (val == -1 && operation == 'w' && singlebyte == true)) {
+    printf("AT28CProgrammer V.1.01\n");
     printf("use: AT28CProgrammer -d <device> -t <romtype> -o <operation> [-a <address>] [-b <byte>] [-f <filename>]\n");
     printf("\t-d: serial port\n");
     printf("\t-t AT28C64: eeprom type AT28C64\n");
