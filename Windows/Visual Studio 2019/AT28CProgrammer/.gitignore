@@ -1,0 +1,7 @@
+# Visual Studio cache/options directory
+.vs/
+
+# Project directories
+AT28CProgrammer/bin/
+AT28CProgrammer/obj/
+
