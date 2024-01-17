@@ -18,6 +18,11 @@ byte readByte(unsigned int address);
 byte writeByte(unsigned int address, byte value);
 
 //******************************************************************************************************************//
+//* Attende il termine della scrittura di un byte e ne verifica la corretta valorizzazione
+//******************************************************************************************************************//
+byte waitAndCheckWrite(byte value);
+
+//******************************************************************************************************************//
 //* Scrittura della EEPROM
 //******************************************************************************************************************//
 void writeEEPROM(unsigned int size);

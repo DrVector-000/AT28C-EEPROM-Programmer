@@ -39,7 +39,7 @@ void setup() {
   //addressWrite(0x0000);
 
   Serial.begin(115200);
-  Serial.println("AT28C EEPROM PROGRAMMER V.1.00");
+  Serial.println("AT28C EEPROM PROGRAMMER V.1.01");
   Serial.println("");
 }
 
@@ -111,7 +111,8 @@ void ParseComands(String s) {
       //Serial.println("PARAM: " + params[0] + "," + params[1]);
       if (params[0] != "") {
         byte b = writeByte(params[0].toInt(), params[1].toInt());
-        Serial.println("+WRITEBYTE=" + (String)b);
+        byte wb = waitAndCheckWrite(b);
+        Serial.println("+WRITEBYTE=" + (String)wb);
       }
     }
     //**********************************************

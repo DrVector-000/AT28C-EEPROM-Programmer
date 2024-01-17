@@ -27,8 +27,8 @@ int requestRead(int fd, e_rom_type romtype);
 // invia il comando di richiesta scrittura della memoria
 int requestWrite(int fd, e_rom_type romtype, bool paged);
 
-// legge e visualizza la risposta dal programmatore
-int readAnswer(int fd, long msec);
+// legge e visualizza o salva nel buffer la risposta dal programmatore
+int readAnswer(int fd, char* buffer, long msec);
 
 // legge la risposta dal programmatore con il contenuto della memoria e lo salva sul file indicato, attende la risposta per max msec millisecondi 
 int readEprom(int fd, e_rom_type romtype, char* filename, long msec);
@@ -42,11 +42,11 @@ int writeEprom(int fd, e_rom_type romtype, bool paged, char* filename, long msec
 // setup Software Data Protection
 int setupSDP(int fd, bool enable, long msec);
 
-// invia al programmatore il byte da scrivere, attende al massimo msecforbyte millisecondi
-int writeByte(int fd, int address, unsigned char val, long msecforbyte);
+// invia al programmatore la locazione di memoria e il byte da scrivere
+int requestWriteByte(int fd, int address, unsigned char val, long msecforbyte);
 
-// legge dal programmatore la locazione di memoria richiesta, attende al massimo msecforbyte millisecondi
-int readByte(int fd, int address, long msecforbyte);
+// legge al programmatore la locazione di memoria da leggere
+int requestReadByte(int fd, int address, long msecforbyte);
 
 // applicazione principale
 int main (int argc, char **argv) {
@@ -253,10 +253,10 @@ int main (int argc, char **argv) {
   }
 
   // attende la risposta per un massimo di 100 ms (se il dispositivo non è stato resettato nell'apertura della comunicazione risponderà qui)
-  if (readAnswer(fd, 100) == -1) {
+  if (readAnswer(fd, NULL, 100) == -1) {
     // non ha ricevuto la risposta alla versione firmware
     // attende l'eventuale intestazione inviata dal programmatore per massimo 1.5 secondi
-    if (readAnswer(fd, 1500) == -1) {
+    if (readAnswer(fd, NULL, 1500) == -1) {
       close(fd);
       printf("error reading header\n");
       return -1;
@@ -270,7 +270,7 @@ int main (int argc, char **argv) {
     }
 
     // attende la risposta contentente la versione firmware per un massimo di 100 ms
-    if (readAnswer(fd, 100) == -1) {
+    if (readAnswer(fd, NULL, 100) == -1) {
       close(fd);
       printf("error reading firmware version\n");
       return -1;
@@ -296,10 +296,27 @@ int main (int argc, char **argv) {
   else if (operation == 'w') {
     if (singlebyte) {
       // invia il comando di richiesta scrittura della byte
-      if (writeByte(fd, address, val, 100) == -1) {
+      if (requestWriteByte(fd, address, val, 100) == -1) {
         close(fd);
         printf("error request write byte\n");
         return -1;
+      }
+      // attende la risposta contentente il byte presente nella EPROM dopo la scrittura
+      char buffer[64];
+      if (readAnswer(fd, buffer, 100) == -1) {
+        close(fd);
+        printf("error reading firmware version\n");
+        return -1;
+      }
+      if (memcmp(buffer, "+WRITEBYTE=", 11) == 0) {
+        int wval;
+        sscanf(buffer + 11, "%d", &wval);
+        unsigned char c = (unsigned char)wval;
+        if (c != val) {
+          printf("write error, read byte %u [x%02X] at address %u [x%04X]\n", c, c, (unsigned int)address, (unsigned int)address);
+        } else {
+          printf("written byte %u [x%02X] at address %u [x%04X]\n", c, c, (unsigned int)address, (unsigned int)address);
+        }
       }
     } else {
       // invia il comando di richiesta scrittura della memoria selezionata
@@ -320,10 +337,23 @@ int main (int argc, char **argv) {
   else if (operation == 'r') {
     if (singlebyte) {
       // invia il comando di richiesta scrittura della byte
-      if (readByte(fd, address, 100) == -1) {
+      if (requestReadByte(fd, address, 100) == -1) {
         close(fd);
         printf("error request read byte\n");
         return -1;
+      }
+      // attende la risposta contentente il byte letto dalla EPROM
+      char buffer[64];
+      if (readAnswer(fd, buffer, 100) == -1) {
+        close(fd);
+        printf("error reading firmware version\n");
+        return -1;
+      }
+      if (memcmp(buffer, "+READBYTE=", 10) == 0) {
+        int val;
+        sscanf(buffer + 10, "%d", &val);
+        unsigned char c = (unsigned char)val;
+        printf("read byte %u [x%02X] at address %u [x%04X]\n", c, c, (unsigned int)address, (unsigned int)address);
       }
     } else {
       // invia il comando di richiesta lettura della memoria selezionata
@@ -410,8 +440,8 @@ int requestWrite(int fd, e_rom_type romtype, bool paged) {
   return -1;
 }
 
-// legge e visualizza la risposta dal programmatore
-int readAnswer(int fd, long msec) {
+// legge e visualizza o salva nel buffer la risposta dal programmatore
+int readAnswer(int fd, char* buffer, long msec) {
   int readed = 0;
   while (true) {
     fd_set rfds;
@@ -432,11 +462,16 @@ int readAnswer(int fd, long msec) {
       // ricevuto risposta legge 1 carattere e lo stampa
       char c;
       read(fd, &c, 1);
-      readed++;
       // filtra i caratteri di line feed e carriage return
       if (c != '\n' && c != '\r') {
-        printf("%c", c);
+        if (buffer == NULL) {
+          printf("%c", c);
+        } else {
+          buffer[readed] = c;
+          buffer[readed + 1] = 0;
+        }
       }
+      readed++;
       // ha ricevuto almeno un carattere,
       // imposta il timeout per i prossimi caratteri a 100 ms
       msec = 100;
@@ -448,7 +483,9 @@ int readAnswer(int fd, long msec) {
 
   // se ha ricevuto dei caratteri solo alla fine visualizza un fine riga
   if (readed) {
-    printf("\n");
+    if (buffer == NULL) {
+      printf("\n");
+    }
     return 0;
   }
 
@@ -726,78 +763,24 @@ int setupSDP(int fd, bool enable, long msec) {
   return -1;
 }
 
-// invia al programmatore il byte da scrivere, attende al massimo msecforbyte millisecondi
-int writeByte(int fd, int address, unsigned char val, long msecforbyte) {
+// invia al programmatore la locazione di memoria e il byte da scrivere
+int requestWriteByte(int fd, int address, unsigned char val, long msecforbyte) {
   tcflush(fd, TCIOFLUSH);
 
   const char* cmdWriteByte = "WRITEBYTE=%d,%d\r";
   char buff[32];
   sprintf(buff, cmdWriteByte, address, val);
   printf("write byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)val, (unsigned char)val, (unsigned int)address, (unsigned int)address);
-  write(fd, cmdWriteByte, strlen(cmdWriteByte));
-
-  fd_set rfds;
-  struct timeval tv;
-  int retval;
-
-  FD_ZERO(&rfds);
-  FD_SET(fd, &rfds);
-
-  tv.tv_sec = (msecforbyte * 1000) / 1000000;
-  tv.tv_usec = (msecforbyte * 1000) % 1000000;
-
-  retval = select(fd + 1, &rfds, NULL, NULL, &tv);
-  if (retval == -1) {
-    printf("error select\n");
-    return -1;
-  } else if (retval > 0) {
-    // ricevuto risposta legge 1 carattere e lo stampa
-    unsigned char c;
-    read(fd, &c, 1);
-    if (c != val) {
-      printf("write error, read byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
-    } else {
-      printf("written byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
-    }
-  } else {
-    return -1;
-  }
-
-  return 0;
+  return write(fd, buff, strlen(buff));
 }
 
-// legge dal programmatore la locazione di memoria richiesta, attende al massimo msecforbyte millisecondi
-int readByte(int fd, int address, long msecforbyte) {
+// legge al programmatore la locazione di memoria da leggere
+int requestReadByte(int fd, int address, long msecforbyte) {
   tcflush(fd, TCIOFLUSH);
 
   const char* cmdReadByte = "READBYTE=%d\r";
   char buff[32];
   sprintf(buff, cmdReadByte, address);
   printf("read byte from address %u [x%04X]\n", (unsigned int)address, (unsigned int)address);
-  write(fd, cmdReadByte, strlen(cmdReadByte));
-
-  fd_set rfds;
-  struct timeval tv;
-  int retval;
-
-  FD_ZERO(&rfds);
-  FD_SET(fd, &rfds);
-
-  tv.tv_sec = (msecforbyte * 1000) / 1000000;
-  tv.tv_usec = (msecforbyte * 1000) % 1000000;
-
-  retval = select(fd + 1, &rfds, NULL, NULL, &tv);
-  if (retval == -1) {
-    printf("error select\n");
-    return -1;
-  } else if (retval > 0) {
-    // ricevuto risposta legge 1 carattere e lo stampa
-    char c;
-    read(fd, &c, 1);
-    printf("read byte %u [x%02X] at address %u [x%04X]\n", (unsigned char)c, (unsigned char)c, (unsigned int)address, (unsigned int)address);
-  } else {
-    return -1;
-  }
-
-  return 0;
+  return write(fd, buff, strlen(buff));
 }
