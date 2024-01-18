@@ -151,6 +151,7 @@
             this.cBTipoEEPROM.FormattingEnabled = true;
             this.cBTipoEEPROM.Items.AddRange(new object[] {
             "AT28C64",
+            "AT28C64B",
             "AT28C256"});
             this.cBTipoEEPROM.Location = new System.Drawing.Point(315, 179);
             this.cBTipoEEPROM.Name = "cBTipoEEPROM";
@@ -238,7 +239,7 @@
             this.Controls.Add(this.pictureBox1);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Form1";
-            this.Text = "AT28C Programmer v.1.02";
+            this.Text = "AT28C Programmer v.1.03";
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();

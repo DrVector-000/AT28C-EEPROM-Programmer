@@ -140,6 +140,7 @@ namespace AT28CProgrammer
             switch (cBTipoEEPROM.Text)
             {
                 case "AT28C64":
+                case "AT28C64B":
                     size = 8192;
                     break;
                 case "AT28C256":
@@ -193,7 +194,7 @@ namespace AT28CProgrammer
                 return;
             }
 
-            if (cBTipoEEPROM.Text == "AT28C256")
+            if ((cBTipoEEPROM.Text == "AT28C256") || (cBTipoEEPROM.Text == "AT28C64B"))
             {
                 pagesize = 64;
             }
@@ -232,7 +233,7 @@ namespace AT28CProgrammer
                 }
                 else
                 {
-                    tBInfo.AppendText("Errore scrittua EEPROM\r\n");
+                    tBInfo.AppendText("Errore scrittura EEPROM\r\n");
                 }
                 tBInfo.AppendText("\r\n");
             }
@@ -247,6 +248,7 @@ namespace AT28CProgrammer
                 case "AT28C64":
                     groupBox1.Enabled = false;
                     break;
+                case "AT28C64B":
                 case "AT28C256":
                     groupBox1.Enabled = true;
                     break;
