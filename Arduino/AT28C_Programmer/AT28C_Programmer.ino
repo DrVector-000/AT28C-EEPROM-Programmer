@@ -39,7 +39,8 @@ void setup() {
   //addressWrite(0x0000);
 
   Serial.begin(115200);
-  Serial.println("AT28C EEPROM PROGRAMMER V.1.01");
+  // Versione prodotto (come PCB)
+  Serial.println("AT28C EEPROM PROGRAMMER V.1.1");
   Serial.println("");
 }
 
@@ -89,7 +90,8 @@ void ParseComands(String s) {
       GetComandParams(s, params);
       // Serial.println("PARAM: " + params[0]);
       if (params[0] == "?") {
-        Serial.println("+VERSION=0.002b");
+        // Versione del firmware incrementale
+        Serial.println("+VERSION=0.003");
       }
     }
     //**********************************************
