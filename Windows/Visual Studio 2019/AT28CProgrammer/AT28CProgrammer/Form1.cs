@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define ENG
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Ports;
@@ -21,6 +23,18 @@ namespace AT28CProgrammer
         public Form1()
         {
             InitializeComponent();
+
+#if ENG
+            label1.Text = "Serial Port";
+            bConnetti.Text = "Open";
+            bDisconnetti.Text = "Close";
+            label2.Text = "EEPROM Type";
+            bRead.Text = "Read";
+            bWrite.Text = "Write";
+            button1.Text = "Enable";
+            button2.Text = "Disable";
+            toolStripStatusLabel1.Text = "Device not connected";
+#endif
 
             // Inizializza porta seriale
             _serialPort = new SerialPort();
@@ -75,7 +89,11 @@ namespace AT28CProgrammer
                     //bDump.Enabled = true;
                     //bRAMDump.Enabled = true;
                     //bRAMWrite.Enabled = true;
+#if ENG
+                    toolStripStatusLabel1.Text = "Device connected";
+#else
                     toolStripStatusLabel1.Text = "Dispositivo connesso";
+#endif
                 }
                 else
                 {
@@ -101,7 +119,11 @@ namespace AT28CProgrammer
                             //bDump.Enabled = true;
                             //bRAMDump.Enabled = true;
                             //bRAMWrite.Enabled = true;
+#if ENG
+                            toolStripStatusLabel1.Text = "Device connected";
+#else
                             toolStripStatusLabel1.Text = "Dispositivo connesso";
+#endif
                         }
                         else
                         {
@@ -127,7 +149,11 @@ namespace AT28CProgrammer
                 //bDump.Enabled = false;
                 //bRAMDump.Enabled = false;
                 //bRAMWrite.Enabled = false;
+#if ENG
+                toolStripStatusLabel1.Text = "Device not connected";
+#else
                 toolStripStatusLabel1.Text = "Dispositivo non connesso";
+#endif
             }
         }
 
@@ -157,7 +183,11 @@ namespace AT28CProgrammer
                 saveFileDialog1.FileName = "dump.bin";
                 if (saveFileDialog1.ShowDialog() == DialogResult.OK)
                 {
+#if ENG
+                    tBInfo.AppendText("Start reading EEPROM \r\n");
+#else
                     tBInfo.AppendText("Inizio lettura EEPROM \r\n");
+#endif
                     tBInfo.AppendText(DateTime.Now.ToString("HH:mm:ss") + "\r\n");
                     tBInfo.Invalidate();
                     tBInfo.Update();
@@ -174,7 +204,11 @@ namespace AT28CProgrammer
                         writer.Write(buffer, 0, buffer.Length);
                     }
 
-                    tBInfo.AppendText("Lettura EEPROM terminato\r\n");
+#if ENG
+                    tBInfo.AppendText("EEPROM reading finished\r\n");
+#else
+                    tBInfo.AppendText("Lettura EEPROM terminata\r\n");
+#endif
                     tBInfo.AppendText(DateTime.Now.ToString("HH:mm:ss") + "\r\n");
                     tBInfo.AppendText("\r\n");
                 }
@@ -190,7 +224,11 @@ namespace AT28CProgrammer
 
             if (cBTipoEEPROM.Text == "")
             {
+#if ENG
+                tBInfo.AppendText("Select the type of EEPROM \r\n");
+#else
                 tBInfo.AppendText("Selezionare il tipo di EEPROM \r\n");
+#endif
                 return;
             }
 
@@ -210,7 +248,11 @@ namespace AT28CProgrammer
                 progressBar1.Maximum = size;
                 progressBar1.Value = 0;
 
+#if ENG
+                tBInfo.AppendText("EEPROM write start \r\n");
+#else
                 tBInfo.AppendText("Inizio scrittura EEPROM \r\n");
+#endif
                 tBInfo.Invalidate();
                 tBInfo.Update();
                 tBInfo.Refresh();
@@ -229,11 +271,19 @@ namespace AT28CProgrammer
 
                 if (ret == 0)
                 {
+#if ENG
+                    tBInfo.AppendText("EEPROM write finished\r\n");
+#else
                     tBInfo.AppendText("Scrittua EEPROM terminata\r\n");
+#endif
                 }
                 else
                 {
+#if ENG
+                    tBInfo.AppendText("EEPROM write error\r\n");
+#else
                     tBInfo.AppendText("Errore scrittura EEPROM\r\n");
+#endif
                 }
                 tBInfo.AppendText("\r\n");
             }
@@ -255,9 +305,9 @@ namespace AT28CProgrammer
             }
         }
 
-        #endregion
+#endregion
 
-        #region Metodi (Accesso privato)
+#region Metodi (Accesso privato)
 
         private bool Connetti()
         {
@@ -413,7 +463,7 @@ namespace AT28CProgrammer
             return -1;
         }
 
-        #endregion
+#endregion
 
     }
 }
