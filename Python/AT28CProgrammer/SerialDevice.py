@@ -87,7 +87,6 @@ class SerialDevice:
                 self.__serial.write(byte)
                 p = p + 1
             
-
             # Verifica scritttura
             expiredtime = time.perf_counter_ns() + 100000000
             #count = 0
@@ -108,67 +107,3 @@ class SerialDevice:
             i = i + pagesize
 
         return 0
-    
-
-
-"""
-    def getrombanks(self):
-        res = self.__sendcommand(b"GETROMBANKS=?\r")
-        return res
-    
-    def getgametitle(self):
-        res = self.__sendcommand(b"GETTITLE=?\r")
-        return res
-
-    def getgamecode(self):
-        res = self.__sendcommand(b"GETCODE=?\r")
-        return res
-
-    def getcassettetype(self):
-        res = self.__sendcommand(b"GETTYPE=?\r")
-        return res
-
-    def getcgbsupport(self):
-        res = self.__sendcommand(b"GETCGBSUPPORT=?\r")
-        return res
-
-    def getmakercode(self):
-        res = self.__sendcommand(b"GETMAKERCODE=?\r")
-        return res
-
-    def getsgbsupport(self):
-        res = self.__sendcommand(b"GETSGBSUPPORT=?\r")
-        return res
-
-    def getromsize(self):
-        res = self.__sendcommand(b"GETROMSIZE=?\r")
-        return res
-
-    def getramsize(self):
-        res = self.__sendcommand(b"GETRAMSIZE=?\r")
-        return res
-
-    def getdestinationcode(self):
-        res = self.__sendcommand(b"GETDESTCODE=?\r")
-        return res
-
-    def getoldmakercode(self):
-        res = self.__sendcommand(b"GETOLDMAKERCODE=?\r")
-        return res
-
-    def getromversion(self):
-        res = self.__sendcommand(b"GETROMVERSION=?\r")
-        return res
-
-    def dumprombank(self, banknumber):
-        pass
-
-    def getrambanks(self):
-        pass
-
-    def dumprambank(self, banknumber):
-        pass
-
-    def writerambank(self, banknumber, datas):
-        pass
-"""
