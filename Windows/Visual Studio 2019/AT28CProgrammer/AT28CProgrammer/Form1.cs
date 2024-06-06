@@ -305,9 +305,19 @@ namespace AT28CProgrammer
             }
         }
 
-#endregion
+        private void button1_Click(object sender, EventArgs e)
+        {
+            EnableSDP(true);
+        }
 
-#region Metodi (Accesso privato)
+        private void button2_Click(object sender, EventArgs e)
+        {
+            EnableSDP(false);
+        }
+        
+        #endregion
+
+        #region Metodi (Accesso privato)
 
         private bool Connetti()
         {
@@ -345,6 +355,40 @@ namespace AT28CProgrammer
                         s = _serialPort.ReadLine();
                         string[] split = s.Trim('\r').Split(new char[] { '=' });
                         if (split[0] == "+VERSION")
+                        {
+                            s = split[1];
+                            break;
+                        }
+                    }
+                }
+                return s;
+            }
+            catch
+            {
+                return s;
+            }
+        }
+
+        private string EnableSDP(bool enable)
+        {
+            String s = "";
+            try
+            {
+                if (enable)
+                    _serialPort.Write("ENABLESDP=1\r");
+                else
+                    _serialPort.Write("ENABLESDP=0\r");
+
+                // 100 ms secondi di timeout
+                int ExpiredTick = Environment.TickCount + 100;
+                while (Environment.TickCount < ExpiredTick)
+                {
+                    if (_serialPort.BytesToRead > 0)
+                    {
+                        ExpiredTick = Environment.TickCount + 100;
+                        s = _serialPort.ReadLine();
+                        string[] split = s.Trim('\r').Split(new char[] { '=' });
+                        if (split[0] == "+ENABLESDP")
                         {
                             s = split[1];
                             break;
@@ -463,7 +507,7 @@ namespace AT28CProgrammer
             return -1;
         }
 
-#endregion
+        #endregion
 
     }
 }
